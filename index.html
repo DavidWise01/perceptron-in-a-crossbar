@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Perceptron in a Crossbar — Ohm multiplies, Kirchhoff sums</title>
+<meta name="description" content="A functional memristor-crossbar perceptron — arguably the cleanest hardware neuron. Ohm's law does the multiply (I=G·V, conductance = weight), Kirchhoff's current law does the sum (column currents add), a sense amp does the threshold — a whole dot product computed in one step, inside the memory, no von Neumann trip. Live crosspoint with pinched hysteresis, the crossbar MAC, and it learns AND/OR but not XOR (one cut → stack crossbars = depth). Confidence-tiered: STRONG (in-memory MAC) / MIDDLING (analog precision, drift, IR drop) / FRONTIER (reliable in-situ training at scale). David Lee Wise, two-layer honest.">
+<style>
+  :root{--bg:#0a0805;--panel:#140f08;--panel2:#1b140b;--edge:#3a2c16;--ink:#f3ead8;--dim:#bba788;--faint:#7d6a4c;
+    --cu:#e8a13a;--cu2:#ffc874;--hot:#ff7a3c;--cool:#2a3a5c;--volt:#5ad1ff;--ok:#5fe39a;--rose:#fb7185;--amber:#fbbf24;--ember:#fb923c;
+    --mono:'SFMono-Regular',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;--serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.55;
+    background-image:radial-gradient(1200px 600px at 75% -10%,#241606 0%,transparent 55%),radial-gradient(900px 500px at 0% 100%,#10100a 0%,transparent 55%);}
+  .wrap{max-width:1040px;margin:0 auto;padding:42px 26px 90px}
+  header{border-bottom:1px solid var(--edge);padding-bottom:22px;margin-bottom:24px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--cu);opacity:.9}
+  h1{font-size:34px;line-height:1.12;margin:.32em 0 .18em;font-weight:600}h1 em{color:var(--cu2);font-style:italic}
+  .sub{color:var(--dim);font-size:15.5px;max-width:78ch}
+  .lin{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:14px}.lin b{color:var(--cu)}.lin .v{color:var(--volt)}
+  .verdicts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:22px 0}@media(max-width:720px){.verdicts{grid-template-columns:1fr}}
+  .vc{border:1px solid var(--edge);border-radius:11px;padding:13px 15px;border-top-width:3px}
+  .vc .badge{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.12em}
+  .vc.s{border-top-color:var(--ok)}.vc.s .badge{color:var(--ok)}
+  .vc.m{border-top-color:var(--amber)}.vc.m .badge{color:var(--amber)}
+  .vc.f{border-top-color:var(--ember)}.vc.f .badge{color:var(--ember)}
+  .vc p{font-size:12px;color:var(--dim);margin:6px 0 0;line-height:1.45}.vc p b{color:var(--ink)}
+  section{margin:36px 0}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--cu2);border-left:2px solid var(--cu);padding-left:11px;margin:0 0 6px}
+  .lede{color:var(--dim);font-size:15px;margin:0 0 18px;max-width:80ch}
+  .panel{background:linear-gradient(180deg,var(--panel),#0a0805);border:1px solid var(--edge);border-radius:14px;padding:20px;box-shadow:0 24px 60px -40px #000}
+  .controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}
+  button{font-family:var(--mono);font-size:12px;color:var(--ink);background:#231a0d;border:1px solid var(--edge);border-radius:8px;padding:8px 13px;cursor:pointer;transition:.15s}
+  button:hover{background:#2e2210;border-color:var(--cu)}button.on{background:#6e4a12;border-color:var(--cu2);color:#fff}
+  button.in{min-width:74px}button.hi{background:#0c2c3a;border-color:var(--volt);color:#a3e8ff}button.lo{background:#2a1622;border-color:var(--rose);color:#ffc2cd}
+  label.sl{font-family:var(--mono);font-size:11px;color:var(--dim);display:flex;align-items:center;gap:8px}
+  input[type=range]{accent-color:var(--cu);width:120px}
+  canvas{display:block;width:100%;border-radius:10px;background:#07060a;border:1px solid var(--edge)}
+  .cap{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:7px}
+  .pgrid{display:grid;grid-template-columns:1.2fr .8fr;gap:22px}@media(max-width:820px){.pgrid{grid-template-columns:1fr}}
+  .reads{display:flex;flex-direction:column;gap:12px}
+  .stat .v{font-family:var(--mono);font-size:26px;font-weight:600}.stat .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .pill{font-family:var(--mono);font-size:18px;font-weight:700;padding:5px 14px;border-radius:9px;display:inline-block;min-width:120px;text-align:center}
+  .pill.fire{background:var(--ok);color:#04140c}.pill.dark{background:#1a140b;color:var(--faint);border:1px solid var(--edge)}
+  .eq{font-family:var(--mono);font-size:13px;color:var(--cu2);background:#170f06;border:1px solid var(--edge);border-radius:8px;padding:9px 11px;display:inline-block;margin:4px 0}
+  .note{color:var(--dim);font-size:13.5px;border-left:2px solid var(--edge);padding-left:13px;margin:16px 0 0}
+  .map{font-family:var(--mono);font-size:12.5px;display:grid;grid-template-columns:auto auto;gap:4px 14px;margin:8px 0}.map b{color:var(--cu)}.map span{color:var(--dim)}
+  footer{margin-top:46px;border-top:1px solid var(--edge);padding-top:18px;color:var(--faint);font-family:var(--mono);font-size:11px;line-height:1.7}
+  footer a,.bar a{color:var(--cu)}.bar{font-family:var(--mono);font-size:11.5px;margin-bottom:16px}.bar a{text-decoration:none;border-bottom:1px dotted #4a3818}
+  code{font-family:var(--mono);color:var(--cu2);background:#170f06;padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="bar"><a href="https://davidwise01.github.io/ud0/">◄ UD0</a> &nbsp; <a href="https://davidwise01.github.io/perceptron-in-silicon/">silicon</a> &nbsp; <a href="https://davidwise01.github.io/perceptron-in-light/">light</a> &nbsp; <a href="https://davidwise01.github.io/memristor/">the memristor</a></div>
+<header>
+  <div class="kicker">Perceptron theory · the substrate jump · the fifth body</div>
+  <h1>The perceptron in a <em>crossbar</em></h1>
+  <div class="sub">If the others are clever, this one is almost insolent. Lay weights down as <em>conductances</em> on a grid of memristors, drive the rows with input voltages, and the physics does the rest: <em>Ohm's law multiplies</em> (I = G·V at every crosspoint), <em>Kirchhoff's law sums</em> (the currents pour down each column and add themselves). A full dot product, computed in one electrical instant, <em>inside the memory</em> — no fetch, no clock, no von Neumann round trip. The weight and the multiplier are the same physical thing.</div>
+  <div class="lin"><b>weights</b> = memristor conductances Gᵢⱼ &nbsp;·&nbsp; <span class="v">inputs</span> = row voltages Vᵢ &nbsp;·&nbsp; <b>multiply</b> = Ohm (I=GV) &nbsp;·&nbsp; <b>sum</b> = Kirchhoff (column current) &nbsp;·&nbsp; <b>threshold</b> = the sense amp</div>
+</header>
+
+<div class="verdicts">
+  <div class="vc s"><span class="badge">✓ STRONG</span><p><b>The in-memory MAC.</b> A crossbar computing <code>Σ GᵢVᵢ</code> by Ohm + Kirchhoff is bedrock circuit physics, demonstrated as analog dot-product engines (HP, Ielmini, Yang). One step, no data movement.</p></div>
+  <div class="vc m"><span class="badge">◐ MIDDLING</span><p><b>A real crossbar accelerator.</b> It works, but analog: <b>device variability, conductance drift, limited bit-precision, IR drop, sneak paths, write endurance</b>. Useful in the right regime, fiddly everywhere else.</p></div>
+  <div class="vc f"><span class="badge">◔ FRONTIER</span><p><b>Reliable in-situ training at scale.</b> Programming millions of analog conductances precisely, online, with yield — and multi-bit weights that hold — is <b>open engineering</b>.</p></div>
+</div>
+
+<!-- ===== MODULE I : THE CROSSPOINT ===== -->
+<section>
+  <h2>I · One crosspoint — the weight that multiplies itself</h2>
+  <p class="lede">A memristor is a resistor that <em>remembers</em>: drive it hard and its conductance latches to a new value (SET higher, RESET lower) and stays there with the power off. That stored conductance <code>G</code> <em>is</em> a weight. Read it gently with a small voltage and <code>I = G·V</code> — the weight multiplied by the input, in a single device. Its fingerprint is the <b>pinched hysteresis loop</b>: an I–V curve that always passes through the origin (no voltage, no current) and opens into a loop because the conductance depends on history.</p>
+  <div class="panel">
+    <div class="controls">
+      <button id="set" class="on">⬆ SET (raise G)</button>
+      <button id="reset">⬇ RESET (lower G)</button>
+      <label class="sl">read V <input type="range" id="rv" min="-90" max="90" value="40"></label>
+      <span class="mono" style="color:var(--faint)">conductance is non-volatile — it holds with power off</span>
+    </div>
+    <div class="pgrid">
+      <div><canvas id="cell" width="560" height="300"></canvas>
+        <div class="cap">the pinched-hysteresis I–V loop (Chua 1971 · TiO₂ device, HP 2008) · the dot = your read point I = G·V · loop pinches at the origin</div></div>
+      <div class="reads">
+        <div class="stat"><div class="v" id="gval" style="color:var(--cu2)">0.50</div><div class="k">stored conductance G (the weight)</div></div>
+        <div class="stat"><div class="v" id="ival" style="color:var(--volt)">+0.20</div><div class="k">read current  I = G·V  (the product)</div></div>
+        <div class="map"><b>multiply</b><span>= Ohm's law, in the device</span><b>weight store</b><span>= non-volatile conductance</span><b>signed w</b><span>= a G⁺,G⁻ pair (next module)</span></div>
+        <div class="note">SET and RESET are how you <em>write</em> the weight — the same pulses that store a bit store a synapse. The memory cell and the multiplier collapsed into one component is the whole trick.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MODULE II : THE CROSSBAR MAC ===== -->
+<section>
+  <h2>II · The crossbar — a dot product in one electrical instant</h2>
+  <p class="lede">Tile the cells into a grid. Each row is an input wire held at voltage <code>Vᵢ</code>; each column is an output wire. Every crosspoint dumps a current <code>Gᵢⱼ·Vᵢ</code> onto its column, and the column simply <em>adds them</em> — Kirchhoff has no choice. The current at the foot of a column <em>is</em> <span class="eq">Iⱼ = Σᵢ Gᵢⱼ Vᵢ</span> the dot product, for free, in parallel, the moment you apply the voltages. Signed weights use a <b>differential pair</b> of columns: <code>w = G⁺ − G⁻</code>. A sense amp on the difference is the threshold.</p>
+  <div class="panel">
+    <div class="controls">
+      x₁ <button class="in hi" id="x1">+1</button> x₂ <button class="in lo" id="x2">−1</button>
+      <label class="sl">w₁ <input type="range" id="w1" min="-100" max="100" value="60"></label>
+      <label class="sl">w₂ <input type="range" id="w2" min="-100" max="100" value="60"></label>
+      <label class="sl">bias <input type="range" id="wb" min="-100" max="100" value="-30"></label>
+    </div>
+    <div class="pgrid">
+      <div><canvas id="bar" width="560" height="320"></canvas>
+        <div class="cap">rows = input voltages · cells colored by conductance · currents pour down the G⁺ / G⁻ columns and sum · differential sense amp = the neuron</div></div>
+      <div class="reads">
+        <div class="stat"><div class="v" id="i1" style="color:var(--cu2)">—</div><div class="k">I⁺ − I⁻  =  b + Σ xᵢwᵢ</div></div>
+        <div class="stat"><div class="v"><span class="pill dark" id="fire">DARK</span></div><div class="k">fires when I⁺ &gt; I⁻</div></div>
+        <div class="note">No instruction ran. No number moved to a processor and back. The array <em>is</em> the computation — that's why it sidesteps the von Neumann bottleneck, and why a crossbar can do a thousand-wide dot product as fast as a one-wide one.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MODULE III : IT LEARNS ===== -->
+<section>
+  <h2>III · It learns — program the conductances, then stack for depth</h2>
+  <p class="lede">Training is just writing conductances. Run the perceptron rule and each weight's <code>G⁺/G⁻</code> pair nudges up or down until the cuts line up — <code>AND</code> and <code>OR</code> resolve in a few sweeps. And the old wall stands: one crossbar is one linear cut, so <code>XOR</code> jams at 3/4 (verified). The escape is the franchise ending — <b>a second crossbar</b> fed by a nonlinear sense layer. Stacked crossbars are deep nets; the body changed, the lesson never does.</p>
+  <div class="panel">
+    <div class="controls">
+      target: <button class="t on" data-t="and">AND</button><button class="t" data-t="or">OR</button><button class="t" data-t="xor">XOR</button>
+      <button id="train">▶ train (program G)</button>
+      <button id="depth">＋ add a 2nd crossbar</button>
+    </div>
+    <div class="pgrid">
+      <div><canvas id="learn" width="560" height="300"></canvas>
+        <div class="cap">input plane · copper = the neuron fires · corners ring green when correct for the target</div></div>
+      <div class="reads">
+        <div class="stat"><div class="v" id="acc" style="color:var(--cu2)">—</div><div class="k">cases correct</div></div>
+        <div class="stat"><div class="v" id="vd" style="font-size:16px;color:var(--dim)">—</div><div class="k">verdict</div></div>
+        <div class="note" id="note3">Pick AND or OR, hit train, and the conductance map settles into a clean cut. Switch to XOR: one corner stays crossed however long it programs — a single crossbar can't fold the plane. <b>Add a 2nd crossbar</b> and a hidden layer of conductances bends the boundary; XOR snaps to 4/4. Five bodies, one moral: depth beats the line.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  THE PERCEPTRON IN A CROSSBAR · the fifth body · confidence-tiered<br>
+  physics verified in Node before build · Ohm+Kirchhoff MAC Σ GᵢVᵢ exact · differential learning AND 4/4, OR 4/4, XOR 3/4 (one cut) · pinched hysteresis I=0 at V=0<br>
+  memristor (Chua 1971 · Strukov/Williams, HP, 2008) · analog dot-product engine (Hu et al.) · in-memory computing (Ielmini &amp; Wong) · stochastic/drift = the real obstacles<br>
+  siblings: <a href="https://davidwise01.github.io/perceptron-in-silicon/">silicon</a> · <a href="https://davidwise01.github.io/perceptron-in-light/">light</a> · <a href="https://davidwise01.github.io/perceptron-in-a-quantum-dot/">quantum dot</a> · <a href="https://davidwise01.github.io/the-gather/">the gather</a> · governor David Lee Wise · CC-BY-ND-4.0
+</footer>
+</div>
+<script>
+"use strict";
+function fit(cv){const r=cv.getBoundingClientRect();const dpr=window.devicePixelRatio||1;cv.width=r.width*dpr;cv.height=r.height*dpr;const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);return{g,w:r.width,h:r.height};}
+function heat(g,t){ // 0..1 -> cool blue to hot copper
+  t=Math.max(0,Math.min(1,t));const r=Math.round(42+t*(255-42)),gg=Math.round(58+t*(161-58)),b=Math.round(92-t*(92-30));return 'rgb('+r+','+gg+','+b+')';}
+
+// ===== MODULE I : crosspoint + hysteresis =====
+(function(){
+  const cv=document.getElementById('cell');let G=0.5,rv=0.4,t=0;
+  function draw(){
+    const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);
+    const padL=44,padR=14,padT=14,padB=30,x0=padL,x1=w-padR,y0=h-padB,y1=padT,cx=(x0+x1)/2,cy=(y0+y1)/2;
+    // axes
+    g.strokeStyle='#3a2c16';g.lineWidth=1;g.beginPath();g.moveTo(x0,cy);g.lineTo(x1,cy);g.moveTo(cx,y1);g.lineTo(cx,y0);g.stroke();
+    g.fillStyle='#7d6a4c';g.font='10px ui-monospace,monospace';g.textAlign='right';g.fillText('I',cx-4,y1+10);g.textAlign='left';g.fillText('V',x1-12,cy-4);
+    // pinched hysteresis loop: I = G(V)·V where G sweeps with history; param by phase
+    const A=(x1-cx)*0.9, Iamp=(cy-y1)*0.85;
+    g.strokeStyle=heat(G);g.lineWidth=2.5;g.globalAlpha=.95;g.beginPath();
+    for(let k=0;k<=240;k++){const ph=k/240*Math.PI*2;const V=Math.sin(ph);
+      const Gd=G + 0.35*Math.cos(ph)*Math.sign(Math.sin(ph)); // history-dependent G -> opens a pinched loop
+      const I=Gd*V; const X=cx+V*A, Y=cy-I*Iamp; k?g.lineTo(X,Y):g.moveTo(X,Y);}
+    g.closePath();g.stroke();g.globalAlpha=1;
+    // pinch point (origin)
+    g.fillStyle='#7d6a4c';g.beginPath();g.arc(cx,cy,3,0,7);g.fill();
+    // read point
+    const I=G*rv;const X=cx+rv*A,Y=cy-I*Iamp;
+    g.strokeStyle='rgba(90,209,255,.4)';g.setLineDash([3,3]);g.beginPath();g.moveTo(X,cy);g.lineTo(X,Y);g.lineTo(cx,Y);g.stroke();g.setLineDash([]);
+    g.fillStyle='#5ad1ff';g.shadowBlur=10;g.shadowColor='#5ad1ff';g.beginPath();g.arc(X,Y,5,0,7);g.fill();g.shadowBlur=0;
+    document.getElementById('gval').textContent=G.toFixed(2);
+    document.getElementById('ival').textContent=(I>=0?'+':'')+I.toFixed(2);
+    t++;requestAnimationFrame(draw);
+  }
+  document.getElementById('set').onclick=()=>{G=Math.min(1,G+0.12);};
+  document.getElementById('reset').onclick=()=>{G=Math.max(0.05,G-0.12);};
+  document.getElementById('rv').oninput=function(){rv=this.value/100;};
+  draw();
+})();
+
+// ===== MODULE II : the crossbar =====
+(function(){
+  const cv=document.getElementById('bar');let x1=1,x2=-1,w1=0.6,w2=0.6,wb=-0.3,t=0;
+  function Gpair(w){const g=Math.abs(w);return w>=0?[0.5+g/2,0.5-g/2]:[0.5-g/2,0.5+g/2];} // G+,G-
+  function out(){return wb + x1*w1 + x2*w2;}
+  function draw(){
+    const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);
+    const rows=[['bias',1,wb,h*0.22],['x₁',x1,w1,h*0.42],['x₂',x2,w2,h*0.62]];
+    const colP=w*0.56,colM=w*0.70,rowX0=w*0.20,foot=h*0.84;
+    const on=out()>0;
+    // columns
+    [[colP,'G⁺','#e8a13a'],[colM,'G⁻','#7d6a4c']].forEach(([cxp,lab,c])=>{
+      g.strokeStyle='#5a4420';g.lineWidth=2;g.beginPath();g.moveTo(cxp,h*0.12);g.lineTo(cxp,foot);g.stroke();
+      g.fillStyle=c;g.font='11px ui-monospace,monospace';g.textAlign='center';g.fillText(lab,cxp,h*0.10);});
+    // rows + cells
+    rows.forEach(([lab,xv,wv,y])=>{
+      g.strokeStyle='#5a4420';g.lineWidth=2;g.beginPath();g.moveTo(rowX0,y);g.lineTo(colM+10,y);g.stroke();
+      g.fillStyle=xv>0?'#a3e8ff':(lab==='bias'?'#bba788':'#ffc2cd');g.font='11px ui-monospace,monospace';g.textAlign='right';
+      g.fillText(lab+'='+(lab==='bias'?'1':(xv>0?'+1':'−1')),rowX0-8,y+4);
+      const [gp,gm]=Gpair(wv);
+      [[colP,gp],[colM,gm]].forEach(([cxp,Gc])=>{
+        g.fillStyle=heat(Gc);g.strokeStyle='#1b140b';g.lineWidth=1;
+        g.beginPath();g.roundRect(cxp-9,y-9,18,18,4);g.fill();g.stroke();
+        // current dots flowing down if V≠0
+        const I=Gc*xv;
+        if(Math.abs(I)>0.05){const ph=(t*0.03)%1;const dy=y+9+ph*(foot-y-9);
+          g.fillStyle=cxp===colP?'#ffc874':'#bba788';g.globalAlpha=.8;g.beginPath();g.arc(cxp,dy,2.5,0,7);g.fill();g.globalAlpha=1;}
+      });
+    });
+    // column sums
+    const Ip=rows.reduce((s,[l,xv,wv])=>{const[gp]=Gpair(wv);return s+gp*xv;},0);
+    const Im=rows.reduce((s,[l,xv,wv])=>{const[gp,gm]=Gpair(wv);return s+gm*xv;},0);
+    // sense amp
+    const sx=(colP+colM)/2, sy=foot+26;
+    g.fillStyle='#231a0d';g.strokeStyle=on?'#5fe39a':'#7d6a4c';g.lineWidth=2;
+    g.beginPath();g.moveTo(sx-26,sy-16);g.lineTo(sx+26,sy);g.lineTo(sx-26,sy+16);g.closePath();g.fill();g.stroke();
+    g.strokeStyle='#5a4420';g.beginPath();g.moveTo(colP,foot);g.lineTo(colP,sy-7);g.lineTo(sx-26,sy-7);g.moveTo(colM,foot);g.lineTo(colM,sy+7);g.lineTo(sx-26,sy+7);g.stroke();
+    g.fillStyle=on?'#5fe39a':'#7d6a4c';g.font='10px ui-monospace,monospace';g.textAlign='center';g.fillText('Σ',sx-6,sy+4);
+    if(on){g.fillStyle='#5fe39a';g.shadowBlur=12;g.shadowColor='#5fe39a';g.beginPath();g.arc(sx+40,sy,5,0,7);g.fill();g.shadowBlur=0;}
+    document.getElementById('i1').textContent=(out()>=0?'+':'')+out().toFixed(2);
+    const f=document.getElementById('fire');f.textContent=on?'⚡ FIRES':'DARK';f.className='pill '+(on?'fire':'dark');
+    document.getElementById('x1').className='in '+(x1>0?'hi':'lo');document.getElementById('x1').textContent=x1>0?'+1':'−1';
+    document.getElementById('x2').className='in '+(x2>0?'hi':'lo');document.getElementById('x2').textContent=x2>0?'+1':'−1';
+    t++;requestAnimationFrame(draw);
+  }
+  document.getElementById('x1').onclick=()=>x1=-x1;document.getElementById('x2').onclick=()=>x2=-x2;
+  document.getElementById('w1').oninput=function(){w1=this.value/100;};
+  document.getElementById('w2').oninput=function(){w2=this.value/100;};
+  document.getElementById('wb').oninput=function(){wb=this.value/100;};
+  draw();
+})();
+
+// ===== MODULE III : learns =====
+(function(){
+  const cv=document.getElementById('learn');let target='and',depth=false,W=[0,0,0],trained=false;
+  const inp=[[-1,-1],[-1,1],[1,-1],[1,1]];
+  const tgt={and:(a,b)=>(a>0&&b>0)?1:0,or:(a,b)=>(a>0||b>0)?1:0,xor:(a,b)=>((a>0)!==(b>0))?1:0};
+  function f1(w,a,b){return (w[0]+w[1]*a+w[2]*b)>0?1:0;}
+  function fire(a,b){if(!depth||target!=='xor')return f1(W,a,b);const orF=(1.5+a+b)>0?1:0,nand=(1.5-a-b)>0?1:0;return (orF&&nand)?1:0;}
+  function train(){W=[0,0,0];const L=0.5;for(let ep=0;ep<300;ep++){let e=0;for(const[a,b]of inp){const t=tgt[target](a,b),y=f1(W,a,b);if(y!==t){const d=t-y;W[0]+=L*d;W[1]+=L*d*a;W[2]+=L*d*b;e++;}}if(!e)break;}trained=true;}
+  function draw(){
+    const{g,w,h}=fit(cv);g.clearRect(0,0,w,h);
+    const S=Math.min(w,h)-30,ox=(w-S)/2,oy=(h-S)/2,RES=54,cell=S/RES;
+    for(let gy=0;gy<RES;gy++)for(let gx=0;gx<RES;gx++){const a=(gx/(RES-1))*2.6-1.3,b=1.3-(gy/(RES-1))*2.6;
+      g.fillStyle=fire(a,b)?'rgba(232,161,58,.16)':'rgba(20,16,11,.5)';g.fillRect(ox+gx*cell,oy+gy*cell,cell+1,cell+1);}
+    g.strokeStyle='#3a2c16';g.lineWidth=1;g.strokeRect(ox,oy,S,S);
+    const P=(a,b)=>[ox+((a+1.3)/2.6)*S,oy+((1.3-b)/2.6)*S];let correct=0;
+    inp.forEach(([a,b])=>{const want=tgt[target](a,b),got=fire(a,b),ok=want===got;if(ok)correct++;const[X,Y]=P(a,b);
+      g.beginPath();g.arc(X,Y,9,0,7);g.fillStyle=want?'#ffc874':'#5ad1ff';g.fill();
+      g.lineWidth=2.5;g.strokeStyle=ok?'#5fe39a':'#fb7185';g.beginPath();g.arc(X,Y,13,0,7);g.stroke();
+      if(!ok){g.strokeStyle='#fb7185';g.lineWidth=2;g.beginPath();g.moveTo(X-7,Y-7);g.lineTo(X+7,Y+7);g.moveTo(X+7,Y-7);g.lineTo(X-7,Y+7);g.stroke();}});
+    document.getElementById('acc').textContent=correct+'/4';
+    const vd=document.getElementById('vd');
+    if(target!=='xor'){vd.textContent=trained?'one cut — learned':'press train';vd.style.color=trained?'#5fe39a':'#bba788';}
+    else if(depth){vd.textContent='2 crossbars — XOR solved';vd.style.color='#5fe39a';}
+    else{vd.textContent=trained?'one cut can’t — 3/4':'press train';vd.style.color=trained?'#fb7185':'#bba788';}
+    requestAnimationFrame(draw);
+  }
+  document.querySelectorAll('.t').forEach(b=>b.onclick=function(){document.querySelectorAll('.t').forEach(x=>x.classList.remove('on'));this.classList.add('on');target=this.dataset.t;trained=false;W=[0,0,0];});
+  document.getElementById('train').onclick=train;
+  document.getElementById('depth').onclick=function(){depth=!depth;this.classList.toggle('on',depth);this.textContent=depth?'－ remove crossbar':'＋ add a 2nd crossbar';};
+  draw();
+})();
+</script>
+</body>
+</html>
