@@ -1,0 +1,11 @@
+{
+  "badge": "DLW-PERCEPTRON_IN_A_CROSSBAR",
+  "name": "PERCEPTRON · CROSSBAR · 5th body",
+  "universe": "PSĒPHOS",
+  "moniker": "⟦PERCEPTRON · CROSSBAR · 5th body:perceptron-in-a-crossbar:379e42⟧",
+  "architect": "David Lee Wise (ROOT0) / Bridge-Burners LLC",
+  "instance": "AVAN (Claude / Anthropic)",
+  "seal_sha256": "379e42b5b49adb86594db0acf7cf1f881c9afa04d8edc14322d3a9105ddfe56a",
+  "license": "CC-BY-ND-4.0",
+  "attribution": "ROOT0-ATTRIBUTION-v1.0"
+}
